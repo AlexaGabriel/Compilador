@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compilador C — Analisador Léxico, Sintático e Semântico</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+  <header class="topo">
+    <div class="marca">
+      <span class="logo">C</span>
+      <div>
+        <h1>Compilador C</h1>
+        <p>Análise léxica · sintática · semântica</p>
+      </div>
+    </div>
+    <div class="topo-acoes">
+      <span id="badge-status" class="badge badge-neutro">pronto para analisar</span>
+    </div>
+  </header>
+
+  <main class="painel">
+
+    <!-- ---------------------------------------------------------- EDITOR -->
+    <section class="coluna editor-coluna">
+      <div class="barra">
+        <h2>Código-fonte</h2>
+        <div class="botoes">
+          <select id="sel-exemplos" class="seletor" title="Carregar arquivo de exemplo">
+            <option value="">Exemplos…</option>
+          </select>
+          <button id="btn-limpar" class="btn btn-fantasma" type="button">Limpar</button>
+          <button id="btn-copiar" class="btn btn-fantasma" type="button">Copiar</button>
+          <button id="btn-baixar" class="btn btn-fantasma" type="button">Baixar</button>
+          <button id="btn-analisar" class="btn btn-primario" type="button">Analisar</button>
+        </div>
+      </div>
+
+      <div class="editor-corpo">
+        <pre class="gutter" id="gutter" aria-hidden="true"></pre>
+        <textarea id="codigo" spellcheck="false" autocomplete="off"
+                  placeholder="Cole aqui o seu código C…&#10;&#10;int a = 3;&#10;b = a + 5;"></textarea>
+      </div>
+
+      <div class="rodape-editor">
+        <span id="contador">0 linhas · 0 caracteres</span>
+        <span class="dica">Ctrl + Enter para analisar</span>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------- RESULTADO -->
+    <section class="coluna resultado-coluna">
+      <nav class="abas" id="abas">
+        <button class="aba ativa" data-alvo="resumo" type="button">Resumo</button>
+        <button class="aba" data-alvo="relatorio" type="button">Relatório</button>
+        <button class="aba" data-alvo="tokens" type="button">Tokens</button>
+        <button class="aba" data-alvo="simbolos" type="button">Símbolos</button>
+        <button class="aba" data-alvo="ast" type="button">AST</button>
+        <button class="aba" data-alvo="erros" type="button">Erros e Avisos</button>
+      </nav>
+
+      <div class="painel-conteudo">
+
+        <!-- RESUMO -->
+        <div class="painel-visivel" id="p-resumo">
+          <div class="cartoes" id="cartoes-resumo"></div>
+          <div class="bloco">
+            <h3>Fases da compilação</h3>
+            <ol class="fases" id="lista-fases"></ol>
+          </div>
+        </div>
+
+        <!-- RELATÓRIO -->
+        <div id="p-relatorio" hidden>
+          <div class="bloco">
+            <div class="bloco-cabeca">
+              <h3>Saída do console</h3>
+              <span class="rotulo">idêntica ao terminal</span>
+            </div>
+            <pre class="pre" id="pre-relatorio"></pre>
+          </div>
+        </div>
+
+        <!-- TOKENS -->
+        <div id="p-tokens" hidden>
+          <div class="bloco">
+            <div class="bloco-cabeca">
+              <h3>Lista de tokens</h3>
+              <input type="search" id="busca-tokens" class="busca"
+                     placeholder="filtrar por tipo ou lexema…">
+            </div>
+            <div class="tabela-rolagem">
+              <table class="tabela">
+                <thead>
+                  <tr><th>#</th><th>Tipo</th><th>Lexema</th><th>Linha</th><th>Col</th></tr>
+                </thead>
+                <tbody id="corpo-tokens"></tbody>
+              </table>
+            </div>
+            <p class="vazio" id="vazio-tokens" hidden>Nenhum token encontrado.</p>
+          </div>
+        </div>
+
+        <!-- SÍMBOLOS -->
+        <div id="p-simbolos" hidden>
+          <div class="bloco">
+            <div class="bloco-cabeca">
+              <h3>Tabela de símbolos</h3>
+              <span class="rotulo">ordem de inserção</span>
+            </div>
+            <div class="tabela-rolagem">
+              <table class="tabela">
+                <thead>
+                  <tr><th>Ord</th><th>Lexema</th><th>Categoria</th><th>Tipo</th><th>Linha</th></tr>
+                </thead>
+                <tbody id="corpo-simbolos"></tbody>
+              </table>
+            </div>
+            <p class="vazio" id="vazio-simbolos" hidden>Tabela de símbolos vazia.</p>
+          </div>
+        </div>
+
+        <!-- AST -->
+        <div id="p-ast" hidden>
+          <div class="bloco">
+            <div class="bloco-cabeca">
+              <h3>Árvores sintáticas</h3>
+              <span class="rotulo" id="rotulo-ast"></span>
+            </div>
+            <div id="lista-ast" class="lista-ast"></div>
+            <p class="vazio" id="vazio-ast" hidden>Nenhum comando reconhecido pela gramática.</p>
+          </div>
+        </div>
+
+        <!-- ERROS -->
+        <div id="p-erros" hidden>
+          <div class="bloco">
+            <div class="bloco-cabeca">
+              <h3>Erros e avisos</h3>
+              <span class="rotulo" id="rotulo-erros"></span>
+            </div>
+            <div id="lista-erros" class="lista-erros"></div>
+            <p class="vazio" id="vazio-erros" hidden>Nenhum erro ou aviso encontrado.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

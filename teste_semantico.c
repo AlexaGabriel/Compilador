@@ -1,0 +1,11 @@
+int resultado = "texto";
+int a = 5;
+float f = a + 2;
+int n = 2.5;
+char *nome = "Ana";
+total = 10;
+a = b + 1;
+char c = "x";
+float g = nome;
+y = 1;
+int y;
