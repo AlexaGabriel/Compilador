@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
   <title>Compilador C — Analisador Léxico, Sintático e Semântico</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -11,7 +12,7 @@
   <header class="topo">
     <div class="marca">
       <span class="logo">C</span>
-      <div>
+      <div class="marca-texto">
         <h1>Compilador C</h1>
         <p>Análise léxica · sintática · semântica</p>
       </div>
@@ -23,11 +24,14 @@
 
   <main class="painel">
 
-    <!-- ---------------------------------------------------------- EDITOR -->
     <section class="coluna editor-coluna">
       <div class="barra">
-        <h2>Código-fonte</h2>
+        <h2 class="titulo-secao">
+          Código-fonte
+          <span id="rotulo-arquivo" class="rotulo-arquivo" hidden></span>
+        </h2>
         <div class="botoes">
+          <button id="btn-abrir" class="btn btn-fantasma" type="button">Abrir</button>
           <select id="sel-exemplos" class="seletor" title="Carregar arquivo de exemplo">
             <option value="">Exemplos…</option>
           </select>
@@ -38,10 +42,15 @@
         </div>
       </div>
 
-      <div class="editor-corpo">
+      <input type="file" id="entrada-arquivo" accept=".c,.h,.txt" hidden>
+
+      <div class="editor-corpo" id="editor-corpo">
         <pre class="gutter" id="gutter" aria-hidden="true"></pre>
         <textarea id="codigo" spellcheck="false" autocomplete="off"
-                  placeholder="Cole aqui o seu código C…&#10;&#10;int a = 3;&#10;b = a + 5;"></textarea>
+                  placeholder="Cole o código C aqui ou use “Abrir” para carregar um arquivo .c…"></textarea>
+        <div class="area-solta" id="area-solta">
+          <span>Solte o arquivo <b>.c</b> aqui</span>
+        </div>
       </div>
 
       <div class="rodape-editor">
@@ -50,8 +59,7 @@
       </div>
     </section>
 
-    <!-- --------------------------------------------------------- RESULTADO -->
-    <section class="coluna resultado-coluna">
+    <section class="coluna resultado-coluna" id="resultado-coluna">
       <nav class="abas" id="abas">
         <button class="aba ativa" data-alvo="resumo" type="button">Resumo</button>
         <button class="aba" data-alvo="relatorio" type="button">Relatório</button>
@@ -63,7 +71,6 @@
 
       <div class="painel-conteudo">
 
-        <!-- RESUMO -->
         <div class="painel-visivel" id="p-resumo">
           <div class="cartoes" id="cartoes-resumo"></div>
           <div class="bloco">
@@ -72,7 +79,6 @@
           </div>
         </div>
 
-        <!-- RELATÓRIO -->
         <div id="p-relatorio" hidden>
           <div class="bloco">
             <div class="bloco-cabeca">
@@ -83,7 +89,6 @@
           </div>
         </div>
 
-        <!-- TOKENS -->
         <div id="p-tokens" hidden>
           <div class="bloco">
             <div class="bloco-cabeca">
@@ -103,7 +108,6 @@
           </div>
         </div>
 
-        <!-- SÍMBOLOS -->
         <div id="p-simbolos" hidden>
           <div class="bloco">
             <div class="bloco-cabeca">
@@ -122,7 +126,6 @@
           </div>
         </div>
 
-        <!-- AST -->
         <div id="p-ast" hidden>
           <div class="bloco">
             <div class="bloco-cabeca">
@@ -134,7 +137,6 @@
           </div>
         </div>
 
-        <!-- ERROS -->
         <div id="p-erros" hidden>
           <div class="bloco">
             <div class="bloco-cabeca">
@@ -150,6 +152,11 @@
     </section>
 
   </main>
+
+  <div class="barra-mobile" id="barra-mobile">
+    <span id="contador-mobile">0 linhas</span>
+    <button id="btn-analisar-mobile" class="btn btn-primario" type="button">Analisar código</button>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
 

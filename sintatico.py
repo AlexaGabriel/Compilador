@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 
 from lexer import TIPOS, tokenizar
 
-# tipo do token -> rótulo do nó na AST
 TERMOS = {
     "ID": "ID",
     "NUM_INT": "NUM",
@@ -35,12 +34,10 @@ TERMOS = {
 }
 
 
-# ---------------------------------------------------------------- AST
-
 @dataclass
 class No:
-    tipo: str                       # Atribuicao, Declaracao, Expressao, ID, NUM...
-    lexema: str = ""                # ex.: "x", "+", "5"
+    tipo: str
+    lexema: str = ""
     linha: int = 0
     filhos: list = field(default_factory=list)
 
@@ -70,8 +67,6 @@ def desenhar_arvore(raiz):
     return linhas
 
 
-# ---------------------------------------------------------------- erros
-
 class ErroSintatico(Exception):
     def __init__(self, mensagem, linha, coluna, falta_ponto_virgula=False):
         super().__init__(mensagem)
@@ -85,14 +80,10 @@ class ErroSintatico(Exception):
                 f"{self.mensagem}")
 
 
-# ---------------------------------------------------------------- parser
-
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
-
-    # ---- utilitários
 
     def atual(self, deslocamento=0):
         i = self.pos + deslocamento
@@ -120,13 +111,11 @@ class Parser:
     def esperar_ponto_virgula(self):
         t = self.atual()
         if t is None or t.tipo != "PONTO_VIRGULA":
-            ant = self.tokens[self.pos - 1]     # aponta para o fim do último token válido
+            ant = self.tokens[self.pos - 1]
             raise ErroSintatico(f"esperado ';' após '{ant.lexema}'",
                                 ant.linha, ant.coluna + len(ant.lexema),
                                 falta_ponto_virgula=True)
         return self.avancar()
-
-    # ---- regras da gramática
 
     def termo(self):
         t = self.atual()
@@ -189,8 +178,6 @@ class Parser:
         self.esperar_ponto_virgula()
         return no
 
-    # ---- varredura do arquivo
-
     @staticmethod
     def _eh_asterisco(t):
         return t is not None and t.tipo == "OP_ARIT" and t.lexema == "*"
@@ -200,11 +187,11 @@ class Parser:
         if not (t.tipo == "PALAVRA_RESERVADA" and t.lexema in TIPOS):
             return False
         k = 1
-        while self._eh_asterisco(self.atual(k)):        # ponteiro: char *s
+        while self._eh_asterisco(self.atual(k)):
             k += 1
         prox, depois = self.atual(k), self.atual(k + 1)
         return (prox is not None and prox.tipo == "ID"
-                and not (depois is not None and depois.tipo == "ABRE_PAR"))  # 'int main(' é função
+                and not (depois is not None and depois.tipo == "ABRE_PAR"))
 
     def _inicia_atribuicao(self):
         t, prox = self.atual(), self.atual(1)
@@ -214,7 +201,7 @@ class Parser:
         """Recuperação de erro: pula até o fim do comando para continuar analisando."""
         self.pos = max(self.pos, inicio + 1)
         if erro.falta_ponto_virgula:
-            return                              # o próximo comando já começou
+            return
         while self.pos < len(self.tokens):
             t = self.tokens[self.pos]
             if t.tipo == "PONTO_VIRGULA":
@@ -227,7 +214,7 @@ class Parser:
     def analisar(self):
         """Retorna (lista_de_ASTs, lista_de_erros)."""
         arvores, erros = [], []
-        parenteses = 0      # dentro de ( ) não há comandos (parâmetros, condição do if...)
+        parenteses = 0
         while self.pos < len(self.tokens):
             t = self.atual()
             inicio = self.pos
@@ -241,14 +228,12 @@ class Parser:
                         parenteses += 1
                     elif t.tipo == "FECHA_PAR":
                         parenteses = max(0, parenteses - 1)
-                    self.pos += 1               # fora da gramática: ignora
+                    self.pos += 1
             except ErroSintatico as e:
                 erros.append(e)
                 self._sincronizar(inicio, e)
         return arvores, erros
 
-
-# ---------------------------------------------------------------- exibição
 
 def imprimir_arvores(arvores):
     print("=" * 62)
@@ -270,8 +255,6 @@ def imprimir_erros_sintaticos(erros):
         print(e)
 
 
-# ---------------------------------------------------------------- execução
-
 def main():
     argumentos = [a for a in sys.argv[1:] if not a.startswith("--")]
     em_json = "--json" in sys.argv
@@ -280,7 +263,7 @@ def main():
         sys.exit(1)
 
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")    # garante ├── no terminal do Windows
+        sys.stdout.reconfigure(encoding="utf-8")
 
     with open(argumentos[0], encoding="utf-8") as f:
         codigo = f.read()

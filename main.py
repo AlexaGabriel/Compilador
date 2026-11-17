@@ -26,23 +26,19 @@ def main():
     with open(sys.argv[1], encoding="utf-8") as f:
         codigo = f.read()
 
-    # I. Léxica
     tokens, tabela, erros_lexicos = tokenizar(codigo)
     imprimir_tokens(tokens)
     imprimir_tabela(tabela)
     imprimir_erros(erros_lexicos)
 
-    # II. Sintática
     print()
     arvores, erros_sintaticos = Parser(tokens).analisar()
     imprimir_arvores(arvores)
     imprimir_erros_sintaticos(erros_sintaticos)
 
-    # III. Semântica
     erros_semanticos, avisos = Semantico(tabela).analisar(arvores)
     imprimir_semantica(erros_semanticos, avisos)
 
-    # Resumo
     print()
     print("=" * 62)
     print(f"RESUMO: {len(erros_lexicos)} erro(s) léxico(s), "

@@ -1,15 +1,19 @@
-/* ============================================================ helpers ==== */
 const $ = (sel) => document.querySelector(sel);
 
 const editor = $("#codigo");
 const gutter = $("#gutter");
 const contador = $("#contador");
+const contadorMobile = $("#contador-mobile");
 const badge = $("#badge-status");
+const entradaArquivo = $("#entrada-arquivo");
+const editorCorpo = $("#editor-corpo");
+const rotuloArquivo = $("#rotulo-arquivo");
+const barraMobile = $("#barra-mobile");
 
 let ultimoRelatorio = "";
+let nomeAtual = "";
 let ultimoNomeArquivo = "relatorio.txt";
 
-/** Cria um elemento com texto seguro (nunca injeta HTML do código do usuário). */
 function el(tag, texto, classe) {
   const node = document.createElement(tag);
   if (texto !== undefined && texto !== null) node.textContent = String(texto);
@@ -26,7 +30,16 @@ function toast(mensagem, ok = false) {
   toast._t = setTimeout(() => { t.hidden = true; }, 4000);
 }
 
-/* ============================================================== abas ==== */
+function ehTelaPequena() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function ajustarAlturaBarra() {
+  if (!barraMobile) return;
+  const altura = barraMobile.offsetHeight;
+  document.documentElement.style.setProperty("--altura-barra-mobile", altura + "px");
+}
+
 document.querySelectorAll(".aba").forEach((aba) => {
   aba.addEventListener("click", () => {
     document.querySelectorAll(".aba").forEach((a) => a.classList.remove("ativa"));
@@ -41,13 +54,27 @@ document.querySelectorAll(".aba").forEach((aba) => {
   });
 });
 
-/* ============================================================ editor ==== */
 function atualizarGutter() {
   const linhas = editor.value.split("\n").length;
   gutter.textContent = Array.from({ length: linhas }, (_, i) => i + 1).join("\n");
-  contador.textContent =
-    `${linhas} linha${linhas === 1 ? "" : "s"} · ${editor.value.length} caracteres`;
+  const texto = `${linhas} linha${linhas === 1 ? "" : "s"} · ${editor.value.length} caracteres`;
+  contador.textContent = texto;
+  contadorMobile.textContent = `${linhas} linha${linhas === 1 ? "" : "s"}`;
   gutter.scrollTop = editor.scrollTop;
+}
+
+function marcarArquivo(nome) {
+  nomeAtual = nome || "";
+  if (nomeAtual) {
+    rotuloArquivo.textContent = nomeAtual;
+    rotuloArquivo.hidden = false;
+    rotuloArquivo.title = nomeAtual;
+    ultimoNomeArquivo = nomeAtual.replace(/\.[^.]+$/, "") + "_relatorio.txt";
+  } else {
+    rotuloArquivo.hidden = true;
+    rotuloArquivo.textContent = "";
+    ultimoNomeArquivo = "relatorio.txt";
+  }
 }
 
 editor.addEventListener("input", () => {
@@ -72,11 +99,63 @@ editor.addEventListener("keydown", (ev) => {
   }
 });
 
-/* =========================================================== chamada ==== */
+function lerArquivo(arquivo) {
+  if (!arquivo) return;
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    editor.value = String(leitor.result || "");
+    atualizarGutter();
+    localStorage.setItem("compilador-codigo", editor.value);
+    marcarArquivo(arquivo.name);
+    toast(`Arquivo “${arquivo.name}” carregado.`, true);
+    analisar();
+  };
+  leitor.onerror = () => toast("Não foi possível ler o arquivo.");
+  leitor.readAsText(arquivo);
+}
+
+$("#btn-abrir").addEventListener("click", () => entradaArquivo.click());
+
+entradaArquivo.addEventListener("change", () => {
+  lerArquivo(entradaArquivo.files[0]);
+  entradaArquivo.value = "";
+});
+
+["dragenter", "dragover"].forEach((evento) => {
+  editorCorpo.addEventListener(evento, (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    editorCorpo.classList.add("soltando");
+  });
+});
+
+["dragleave", "dragend"].forEach((evento) => {
+  editorCorpo.addEventListener(evento, (ev) => {
+    ev.preventDefault();
+    editorCorpo.classList.remove("soltando");
+  });
+});
+
+editorCorpo.addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  editorCorpo.classList.remove("soltando");
+  const arquivo = ev.dataTransfer && ev.dataTransfer.files[0];
+  if (!arquivo) return;
+  if (!/\.(c|h|txt)$/i.test(arquivo.name)) {
+    toast("Formato não suportado. Envie um arquivo .c, .h ou .txt.");
+    return;
+  }
+  lerArquivo(arquivo);
+});
+
+window.addEventListener("dragover", (ev) => ev.preventDefault());
+window.addEventListener("drop", (ev) => ev.preventDefault());
+
 async function analisar() {
-  const botao = $("#btn-analisar");
-  botao.disabled = true;
-  botao.textContent = "Analisando…";
+  const botoes = [$("#btn-analisar"), $("#btn-analisar-mobile")];
+  botoes.forEach((b) => { b.disabled = true; });
+  const rotuloOriginal = $("#btn-analisar").textContent;
+  $("#btn-analisar").textContent = "Analisando…";
   badge.className = "badge badge-neutro";
   badge.textContent = "analisando…";
 
@@ -84,7 +163,7 @@ async function analisar() {
     const resposta = await fetch("/api/analisar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo: editor.value }),
+      body: JSON.stringify({ codigo: editor.value, nome_arquivo: nomeAtual }),
     });
 
     if (!resposta.ok) {
@@ -99,22 +178,24 @@ async function analisar() {
     const dados = await resposta.json();
     ultimoRelatorio = dados.relatorio || "";
     render(dados);
+
+    if (ehTelaPequena()) {
+      $("#resultado-coluna").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   } catch (erro) {
     badge.className = "badge badge-erro";
     badge.textContent = "falha na análise";
     toast("Erro ao analisar: " + erro.message);
   } finally {
-    botao.disabled = false;
-    botao.textContent = "Analisar";
+    botoes.forEach((b) => { b.disabled = false; });
+    $("#btn-analisar").textContent = rotuloOriginal;
   }
 }
 
-/* =========================================================== render ==== */
 function render(dados) {
   const r = dados.resumo;
   const erros = dados.erros;
 
-  /* ---- badge do topo ---- */
   if (r.total_erros === 0) {
     badge.className = "badge badge-ok";
     badge.textContent = r.avisos > 0
@@ -125,7 +206,6 @@ function render(dados) {
     badge.textContent = `${r.total_erros} erro(s) encontrado(s)`;
   }
 
-  /* ---- cartões do resumo ---- */
   const cartoes = $("#cartoes-resumo");
   cartoes.textContent = "";
   const cartoesDef = [
@@ -144,15 +224,13 @@ function render(dados) {
     cartoes.appendChild(c);
   });
 
-  /* ---- fases ---- */
   const fases = $("#lista-fases");
   fases.textContent = "";
   const fase = (titulo, detalhe, tagTexto, tagClasse) => {
     const li = el("li");
     li.appendChild(el("b", titulo + " — "));
     li.appendChild(document.createTextNode(detalhe));
-    const tag = el("span", tagTexto, "tag " + tagClasse);
-    li.appendChild(tag);
+    li.appendChild(el("span", tagTexto, "tag " + tagClasse));
     fases.appendChild(li);
   };
   fase("Análise léxica", `${r.tokens} token(s), ${r.simbolos} símbolo(s).`,
@@ -162,10 +240,8 @@ function render(dados) {
   fase("Análise semântica", "variáveis não declaradas e compatibilidade de tipos.",
        r.semanticos ? `${r.semanticos} erro(s)` : "sem erros", r.semanticos ? "tag-erro" : "tag-ok");
 
-  /* ---- relatório ---- */
   $("#pre-relatorio").textContent = dados.relatorio || "(sem saída)";
 
-  /* ---- tokens ---- */
   const corpoTokens = $("#corpo-tokens");
   corpoTokens.textContent = "";
   dados.tokens.forEach((t) => {
@@ -180,7 +256,6 @@ function render(dados) {
   });
   $("#vazio-tokens").hidden = dados.tokens.length > 0;
 
-  /* ---- símbolos ---- */
   const corpoSimbolos = $("#corpo-simbolos");
   corpoSimbolos.textContent = "";
   dados.simbolos.forEach((s) => {
@@ -194,7 +269,6 @@ function render(dados) {
   });
   $("#vazio-simbolos").hidden = dados.simbolos.length > 0;
 
-  /* ---- AST ---- */
   const listaAst = $("#lista-ast");
   listaAst.textContent = "";
   dados.arvores.forEach((arvore) => {
@@ -209,14 +283,11 @@ function render(dados) {
   $("#rotulo-ast").textContent = `${dados.arvores.length} comando(s)`;
   $("#vazio-ast").hidden = dados.arvores.length > 0;
 
-  /* ---- erros e avisos ---- */
   const listaErros = $("#lista-erros");
   listaErros.textContent = "";
   let total = 0;
 
-  const grupo = (titulo) => {
-    listaErros.appendChild(el("div", titulo, "grupo-titulo"));
-  };
+  const grupo = (titulo) => { listaErros.appendChild(el("div", titulo, "grupo-titulo")); };
   const item = (texto, tag, aviso) => {
     const div = el("div", null, "erro-item" + (aviso ? " aviso" : ""));
     div.appendChild(el("span", tag, "origem"));
@@ -246,7 +317,6 @@ function render(dados) {
   $("#vazio-erros").hidden = total > 0;
 }
 
-/* ========================================================== filtros ==== */
 $("#busca-tokens").addEventListener("input", (ev) => {
   const termo = ev.target.value.trim().toLowerCase();
   document.querySelectorAll("#corpo-tokens tr").forEach((tr) => {
@@ -254,11 +324,12 @@ $("#busca-tokens").addEventListener("input", (ev) => {
   });
 });
 
-/* ========================================================== botoes ==== */
 $("#btn-analisar").addEventListener("click", analisar);
+$("#btn-analisar-mobile").addEventListener("click", analisar);
 
 $("#btn-limpar").addEventListener("click", () => {
   editor.value = "";
+  marcarArquivo("");
   atualizarGutter();
   localStorage.removeItem("compilador-codigo");
   editor.focus();
@@ -287,7 +358,6 @@ $("#btn-baixar").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-/* ========================================================= exemplos ==== */
 async function carregarExemplos() {
   try {
     const resposta = await fetch("/api/exemplos");
@@ -306,15 +376,26 @@ $("#sel-exemplos").addEventListener("change", (ev) => {
   const opcao = ev.target.selectedOptions[0];
   if (!opcao || !opcao.value) return;
   editor.value = opcao.dataset.conteudo || "";
-  ultimoNomeArquivo = opcao.value.replace(/\.c$/i, "") + "_relatorio.txt";
+  marcarArquivo(opcao.value);
   atualizarGutter();
   localStorage.setItem("compilador-codigo", editor.value);
   ev.target.value = "";
   analisar();
 });
 
-/* ============================================================ inicio ==== */
+window.addEventListener("resize", ajustarAlturaBarra);
+
 const salvo = localStorage.getItem("compilador-codigo");
 if (salvo) editor.value = salvo;
 atualizarGutter();
+ajustarAlturaBarra();
 carregarExemplos();
+
+const parametros = new URLSearchParams(window.location.search);
+const codigoPelaUrl = parametros.get("codigo");
+if (codigoPelaUrl) {
+  editor.value = codigoPelaUrl;
+  marcarArquivo(parametros.get("arquivo") || "");
+  atualizarGutter();
+  analisar();
+}

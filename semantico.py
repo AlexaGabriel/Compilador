@@ -42,7 +42,7 @@ def compatibilidade(destino, origem):
         if origem in ("int", "char"):
             return "ok"
         if origem == "float":
-            return "aviso"          # float -> int perde a parte fracionária
+            return "aviso"
         return "erro"
     if destino in REAIS:
         return "ok" if origem in ("int", "char", "float") else "erro"
@@ -51,12 +51,10 @@ def compatibilidade(destino, origem):
 
 class Semantico:
     def __init__(self, tabela):
-        self.tabela = tabela            # TabelaSimbolos criada pelo lexer
-        self.declaradas = set()         # nomes já declarados até este ponto do código
+        self.tabela = tabela
+        self.declaradas = set()
         self.erros = []
         self.avisos = []
-
-    # ---- ponto de entrada
 
     def analisar(self, arvores):
         for no in arvores:
@@ -66,29 +64,24 @@ class Semantico:
                 self.atribuicao(no)
         return self.erros, self.avisos
 
-    # ---- comandos
-
     def declaracao(self, no):
         tipo_base = no.filhos[0].lexema
         for declarador in no.filhos[1:]:
             ident = declarador.filhos[0]
             tipo = tipo_base + ("*" if declarador.lexema == "*" else "")
 
-            # a declaração grava o tipo na Tabela de Símbolos
             self.tabela.buscar(ident.lexema).tipo = tipo
             self.declaradas.add(ident.lexema)
 
-            if len(declarador.filhos) == 3:     # ID, OP_ATRIB, expressão
+            if len(declarador.filhos) == 3:
                 origem = self.tipo_da_expressao(declarador.filhos[2])
                 self.checar_atribuicao(tipo, origem, ident.linha)
 
     def atribuicao(self, no):
         ident, _op, expressao = no.filhos
-        destino = self.tipo_da_variavel(ident)          # Opção 2 (lado esquerdo)
-        origem = self.tipo_da_expressao(expressao)      # Opção 2 (lado direito)
+        destino = self.tipo_da_variavel(ident)
+        origem = self.tipo_da_expressao(expressao)
         self.checar_atribuicao(destino, origem, ident.linha)
-
-    # ---- tipos
 
     def tipo_da_variavel(self, no):
         """Consulta a Tabela de Símbolos; None se a variável não foi declarada."""
@@ -112,7 +105,6 @@ class Semantico:
         if no.tipo == "ID":
             return self.tipo_da_variavel(no)
 
-        # Expressao binária
         esq = self.tipo_da_expressao(no.filhos[0])
         dir_ = self.tipo_da_expressao(no.filhos[1])
         if esq is None or dir_ is None:
@@ -123,16 +115,14 @@ class Semantico:
                 f"não é possível usar String em operação aritmética.")
             return None
         if esq.endswith("*") or dir_.endswith("*"):
-            return None                 # aritmética de ponteiros: fora do escopo
+            return None
         if esq in REAIS or dir_ in REAIS or "float" in (esq, dir_):
             return "float"
         return "int"
 
-    # ---- Opção 1
-
     def checar_atribuicao(self, destino, origem, linha):
         if destino is None or origem is None:
-            return                      # já houve erro de variável não declarada
+            return
         resultado = compatibilidade(destino, origem)
         if resultado == "erro":
             self.erros.append(
@@ -143,8 +133,6 @@ class Semantico:
                 f"[AVISO SEMÂNTICO] Linha {linha}: atribuir {origem} a um tipo "
                 f"{destino} pode perder precisão.")
 
-
-# ---------------------------------------------------------------- exibição
 
 def imprimir_semantica(erros, avisos):
     print()

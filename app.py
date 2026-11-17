@@ -1,16 +1,3 @@
-"""
-Servidor web do compilador/analisador de C.
-
-Não altera NADA da lógica do compilador: apenas reaproveita as mesmas
-funções usadas pelo `main.py` (lexer.py -> sintatico.py -> semantico.py)
-e expõe o resultado de duas formas:
-
-    1. texto:  relatório idêntico ao impresso no console (byte a byte)
-    2. dados:  JSON estruturado (tokens, símbolos, AST, erros, resumo)
-
-Uso:  uvicorn app:app --reload        (ou: python -m uvicorn app:app --reload)
-      abre em http://127.0.0.1:8000
-"""
 import io
 import sys
 import threading
@@ -35,11 +22,9 @@ from sintatico import (
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-# O console do Windows usa cp1252 e quebra em caracteres como "Ê".
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# Expressões muito aninhadas podem estourar a recursão do parser.
 sys.setrecursionlimit(10000)
 
 app = FastAPI(
@@ -53,13 +38,10 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR), check_dir=False), name="static")
 
-# O redirect_stdout é global: serializa requisições para não embaralhar o relatório.
 _LOCK = threading.Lock()
 
 LIMITE_CODIGO = 200_000
 
-
-# ---------------------------------------------------------------- contratos
 
 class RequisicaoAnalise(BaseModel):
     codigo: str = Field(
@@ -67,9 +49,12 @@ class RequisicaoAnalise(BaseModel):
         max_length=LIMITE_CODIGO,
         description="Código-fonte C a analisar.",
     )
+    nome_arquivo: str = Field(
+        default="",
+        max_length=260,
+        description="Nome do arquivo de origem exibido na interface.",
+    )
 
-
-# ---------------------------------------------------------------- pipeline
 
 def _tokens_json(tokens) -> List[Dict[str, Any]]:
     return [
@@ -122,33 +107,27 @@ def _arvores_json(arvores) -> List[Dict[str, Any]]:
     ]
 
 
-def analisar_codigo(codigo: str) -> Dict[str, Any]:
+def analisar_codigo(codigo: str, nome_arquivo: str = "") -> Dict[str, Any]:
     """Roda as 3 fases e devolve (dados estruturados + relatório em texto)."""
     buffer = io.StringIO()
     dados: Dict[str, Any] = {}
 
     with _LOCK:
         with redirect_stdout(buffer):
-            # ---- I. Análise léxica -------------------------------------
             tokens, tabela, erros_lexicos = tokenizar(codigo)
             imprimir_tokens(tokens)
             imprimir_tabela(tabela)
             imprimir_erros(erros_lexicos)
-            # A tabela é impressa ANTES da fase semântica (igual ao main.py),
-            # por isso o instantâneo estruturado é tirado aqui.
             dados["simbolos"] = _simbolos_json(tabela)
 
-            # ---- II. Análise sintática ---------------------------------
             print()
             arvores, erros_sintaticos = Parser(tokens).analisar()
             imprimir_arvores(arvores)
             imprimir_erros_sintaticos(erros_sintaticos)
 
-            # ---- III. Análise semântica ---------------------------------
             erros_semanticos, avisos = Semantico(tabela).analisar(arvores)
             imprimir_semantica(erros_semanticos, avisos)
 
-            # ---- Resumo -------------------------------------------------
             print()
             print("=" * 62)
             print(f"RESUMO: {len(erros_lexicos)} erro(s) léxico(s), "
@@ -162,6 +141,7 @@ def analisar_codigo(codigo: str) -> Dict[str, Any]:
 
     return {
         "relatorio": relatorio,
+        "nome_arquivo": nome_arquivo,
         "tokens": _tokens_json(tokens),
         "simbolos": dados["simbolos"],
         "arvores": _arvores_json(arvores),
@@ -185,8 +165,6 @@ def analisar_codigo(codigo: str) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------- endpoints
-
 @app.get("/", include_in_schema=False)
 def pagina_inicial():
     """Front embutido no backend."""
@@ -205,13 +183,13 @@ def saude():
 def api_analisar(requisicao: RequisicaoAnalise):
     """Executa as 3 fases e devolve o relatório (texto) + os dados estruturados."""
     try:
-        return analisar_codigo(requisicao.codigo)
+        return analisar_codigo(requisicao.codigo, requisicao.nome_arquivo)
     except RecursionError:
         raise HTTPException(
             status_code=400,
             detail="Código muito profundamente aninhado para o parser.",
         )
-    except Exception as exc:                       # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Falha na análise: {exc}")
 
 
@@ -219,8 +197,8 @@ def api_analisar(requisicao: RequisicaoAnalise):
 def api_relatorio(requisicao: RequisicaoAnalise):
     """Mesmo conteúdo do console, em texto puro (para salvar/inspecionar)."""
     try:
-        return analisar_codigo(requisicao.codigo)["relatorio"]
-    except Exception as exc:                       # noqa: BLE001
+        return analisar_codigo(requisicao.codigo, requisicao.nome_arquivo)["relatorio"]
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Falha na análise: {exc}")
 
 

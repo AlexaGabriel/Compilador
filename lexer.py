@@ -12,8 +12,6 @@ import sys
 from dataclasses import dataclass
 from typing import Optional
 
-# ---------------------------------------------------------------- definições
-
 PALAVRAS_RESERVADAS = {
     "auto", "break", "case", "char", "const", "continue", "default", "do",
     "double", "else", "enum", "extern", "float", "for", "goto", "if", "int",
@@ -22,27 +20,34 @@ PALAVRAS_RESERVADAS = {
     "while",
 }
 
-# Palavras reservadas que declaram tipo
 TIPOS = {"int", "float", "char", "double", "void", "long", "short"}
 
-# Ordem importa: o primeiro padrão que casar vence.
 ESPECIFICACAO_TOKENS = [
     ("COMENTARIO_LINHA",  r"//[^\n]*"),
     ("COMENTARIO_BLOCO",  r"/\*.*?\*/"),
-    ("COMENTARIO_ABERTO", r"/\*.*"),                       # erro: /* sem */
-    ("DIRETIVA",          r"\#[^\n]*"),                    # #include, #define...
+    ("COMENTARIO_ABERTO", r"/\*.*"),
+    ("CONTINUACAO_LINHA", r"\\\r?\n"),
+    ("DIRETIVA",          r"\#[^\n]*"),
     ("STRING",            r'"(?:\\.|[^"\\\n])*"'),
-    ("ERRO_STRING",       r'"[^"\n]*'),                    # erro: aspas sem fechar
+    ("ERRO_STRING",       r'"[^"\n]*'),
     ("CHAR",              r"'(?:\\.|[^'\\\n])'"),
-    ("ERRO_CHAR",         r"'[^'\n]*'?"),                  # erro: char mal formado
-    ("ERRO_NUMERO",       r"\d+(?:\.\d+)?[A-Za-z_]\w*"),   # erro: 12abc
+    ("ERRO_CHAR",         r"'[^'\n]*'?"),
+    ("ERRO_NUMERO",       r"\d+(?:\.\d+)?[A-Za-z_]\w*"),
     ("NUM_REAL",          r"\d+\.\d+"),
     ("NUM_INT",           r"\d+"),
-    ("ID",                r"[A-Za-z_]\w*"),                # vira PALAVRA_RESERVADA se estiver no conjunto
+    ("ID",                r"[A-Za-z_]\w*"),
+    ("OP_SHIFT",          r"<<|>>"),
     ("OP_REL",            r"==|!=|<=|>=|<|>"),
     ("OP_ATRIB_COMP",     r"\+=|-=|\*=|/=|%="),
     ("OP_INCDEC",         r"\+\+|--"),
     ("OP_LOGICO",         r"&&|\|\||!"),
+    ("OP_BIT_AND",        r"&"),
+    ("OP_BIT_OR",         r"\|"),
+    ("OP_BIT_XOR",        r"\^"),
+    ("OP_BIT_NOT",        r"~"),
+    ("OP_TERNO",          r"\?"),
+    ("OP_DOIS_PONTOS",    r":"),
+    ("OP_SETA",           r"->"),
     ("OP_ATRIB",          r"="),
     ("OP_ARIT",           r"[+\-*/%]"),
     ("PONTO_VIRGULA",     r";"),
@@ -55,7 +60,7 @@ ESPECIFICACAO_TOKENS = [
     ("FECHA_COLCH",       r"\]"),
     ("NOVA_LINHA",        r"\n"),
     ("ESPACO",            r"[ \t\r]+"),
-    ("ERRO_CARACTERE",    r"."),                           # qualquer outra coisa
+    ("ERRO_CARACTERE",    r"."),
 ]
 
 REGEX_MESTRE = re.compile(
@@ -63,7 +68,10 @@ REGEX_MESTRE = re.compile(
     re.DOTALL,
 )
 
-IGNORADOS = {"COMENTARIO_LINHA", "COMENTARIO_BLOCO", "ESPACO", "NOVA_LINHA"}
+IGNORADOS = {
+    "COMENTARIO_LINHA", "COMENTARIO_BLOCO", "ESPACO", "NOVA_LINHA",
+    "CONTINUACAO_LINHA",
+}
 
 MENSAGENS_ERRO = {
     "COMENTARIO_ABERTO": "Comentário de bloco não foi fechado",
@@ -84,16 +92,16 @@ class Token:
 
 @dataclass
 class Simbolo:
-    ordem: int                  # ordem de inserção
+    ordem: int
     lexema: str
-    categoria: str              # PALAVRA_RESERVADA | IDENTIFICADOR
-    tipo: Optional[str]         # tipo declarado (int, float...) ou None
-    linha: int                  # linha da primeira ocorrência
+    categoria: str
+    tipo: Optional[str]
+    linha: int
 
 
 class TabelaSimbolos:
     def __init__(self):
-        self._simbolos = {}     # dict mantém a ordem de inserção
+        self._simbolos = {}
 
     def inserir(self, lexema, categoria, linha, tipo=None):
         simbolo = self._simbolos.get(lexema)
@@ -114,8 +122,6 @@ class TabelaSimbolos:
         return len(self._simbolos)
 
 
-# ---------------------------------------------------------------- analisador
-
 def tokenizar(codigo):
     """Retorna (tokens, tabela_de_simbolos, erros)."""
     tokens = []
@@ -124,15 +130,15 @@ def tokenizar(codigo):
 
     linha = 1
     inicio_linha = 0
-    tipo_pendente = None        # tipo da declaração em andamento (int a, b;)
-    anterior = None             # último token significativo
+    tipo_pendente = None
+    ponteiro_pendente = False
+    anterior = None
 
     for m in REGEX_MESTRE.finditer(codigo):
         tipo = m.lastgroup
         lexema = m.group()
         coluna = m.start() - inicio_linha + 1
 
-        # atualiza contagem de linhas (inclusive em comentários de várias linhas)
         quebras = lexema.count("\n")
 
         if tipo in MENSAGENS_ERRO:
@@ -145,12 +151,12 @@ def tokenizar(codigo):
             token = Token(tipo, lexema, linha, coluna)
             tokens.append(token)
 
-            # ---- tabela de símbolos ----
             if tipo == "PALAVRA_RESERVADA":
                 tabela.inserir(lexema, "PALAVRA_RESERVADA", linha)
-                tipo_pendente = lexema if lexema in TIPOS else tipo_pendente
+                if lexema in TIPOS:
+                    tipo_pendente = lexema
+                    ponteiro_pendente = False
             elif tipo == "ID":
-                # declaração: ID logo após um tipo, vírgula ou '*' dentro de uma declaração
                 eh_declaracao = (
                     tipo_pendente is not None and anterior is not None and (
                         anterior.lexema in TIPOS
@@ -158,11 +164,17 @@ def tokenizar(codigo):
                         or anterior.lexema == "*"
                     )
                 )
-                tabela.inserir(lexema, "IDENTIFICADOR", linha,
-                               tipo_pendente if eh_declaracao else None)
+                tipo_declarado = None
+                if eh_declaracao:
+                    tipo_declarado = tipo_pendente + ("*" if ponteiro_pendente else "")
+                tabela.inserir(lexema, "IDENTIFICADOR", linha, tipo_declarado)
+                ponteiro_pendente = False
+            elif tipo == "OP_ARIT" and lexema == "*":
+                ponteiro_pendente = True
             elif tipo in ("PONTO_VIRGULA", "ABRE_PAR", "FECHA_PAR",
                           "ABRE_CHAVE", "FECHA_CHAVE"):
                 tipo_pendente = None
+                ponteiro_pendente = False
 
             anterior = token
 
@@ -172,8 +184,6 @@ def tokenizar(codigo):
 
     return tokens, tabela, erros
 
-
-# ---------------------------------------------------------------- exibição
 
 def imprimir_tokens(tokens):
     print("=" * 62)
